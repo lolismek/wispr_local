@@ -7,12 +7,12 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
     this.config = {
       speechThreshold: 0.01,
       silenceThreshold: 0.005,
-      silenceDuration: 700,           // ms
-      minSpeechDuration: 400,         // ms
+      silenceDuration: 400,           // ms - faster response
+      minSpeechDuration: 300,         // ms - detect speech sooner
       maxSpeechDuration: 25000,       // ms
       energySmoothingFactor: 0.25,
       preSpeechPadding: 250,          // ms
-      postSpeechPadding: 300          // ms
+      postSpeechPadding: 150          // ms - less padding after speech
     };
 
     // VAD State

@@ -61,10 +61,10 @@ export interface VADStateUpdate {
 export const DEFAULT_VAD_CONFIG: VADConfig = {
   speechThreshold: 0.01,
   silenceThreshold: 0.005,
-  silenceDuration: 700,
-  minSpeechDuration: 400,
+  silenceDuration: 400,         // Reduced from 700ms - faster response
+  minSpeechDuration: 300,        // Reduced from 400ms - detect speech sooner
   maxSpeechDuration: 25000,
   energySmoothingFactor: 0.25,
   preSpeechPadding: 250,
-  postSpeechPadding: 300
+  postSpeechPadding: 150         // Reduced from 300ms - less padding after speech
 };

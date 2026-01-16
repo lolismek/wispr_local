@@ -1,20 +1,29 @@
 import { ipcMain, BrowserWindow } from 'electron';
-import { WhisperRunner } from '../whisper/whisper-runner';
+import { WhisperServer } from '../whisper/whisper-server';
 import { AudioProcessor } from '../whisper/audio-processor';
 import { TranscriptionResult, TranscriptionError, TranscriptionStatusUpdate } from '../../shared/types';
 
-let whisperRunner: WhisperRunner | null = null;
+let whisperServer: WhisperServer | null = null;
 let chunkCounter = 0;
 
 export function registerTranscriptionHandlers(mainWindow: BrowserWindow) {
   console.log('Registering transcription IPC handlers');
 
-  // Initialize whisper runner
+  // Initialize whisper server (persistent process with model loaded in memory)
   try {
-    whisperRunner = new WhisperRunner();
-    sendStatus(mainWindow, 'ready', 'Whisper.cpp ready');
+    whisperServer = new WhisperServer();
+    sendStatus(mainWindow, 'ready', 'Starting Whisper server...');
+
+    // Start server in background (loads model once, keeps it in memory)
+    whisperServer.start().then(() => {
+      console.log('[Main] Whisper server ready - model loaded in memory');
+      sendStatus(mainWindow, 'ready', 'Ready - model loaded');
+    }).catch((error) => {
+      console.error('[Main] Failed to start Whisper server:', error);
+      sendStatus(mainWindow, 'error', `Server start failed: ${(error as Error).message}`);
+    });
   } catch (error) {
-    console.error('Failed to initialize WhisperRunner:', error);
+    console.error('Failed to initialize WhisperServer:', error);
     sendStatus(mainWindow, 'error', `Failed to initialize: ${(error as Error).message}`);
   }
 
@@ -35,9 +44,15 @@ export function registerTranscriptionHandlers(mainWindow: BrowserWindow) {
     console.log('[Main]   Sample rate:', audioData.sampleRate);
     console.log('[Main]   Timestamp:', audioData.timestamp);
 
-    if (!whisperRunner) {
-      console.error('[Main] Whisper runner not initialized!');
-      sendError(mainWindow, 'Whisper runner not initialized', chunkCounter);
+    if (!whisperServer) {
+      console.error('[Main] Whisper server not initialized!');
+      sendError(mainWindow, 'Whisper server not initialized', chunkCounter);
+      return;
+    }
+
+    if (!whisperServer.isServerReady()) {
+      console.error('[Main] Whisper server not ready yet!');
+      sendError(mainWindow, 'Whisper server still starting, please wait...', chunkCounter);
       return;
     }
 
@@ -55,8 +70,8 @@ export function registerTranscriptionHandlers(mainWindow: BrowserWindow) {
       console.log('[Main] WAV file created:', wavFilePath);
 
       console.log('[Main] Starting transcription...');
-      // Transcribe using whisper.cpp
-      const result = await whisperRunner.transcribe(wavFilePath);
+      // Transcribe using whisper server (model already loaded in memory)
+      const result = await whisperServer.transcribe(wavFilePath);
 
       // Clean up temp file
       await AudioProcessor.cleanupTempFile(wavFilePath);

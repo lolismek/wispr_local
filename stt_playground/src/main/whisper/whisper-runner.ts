@@ -13,11 +13,14 @@ export class WhisperRunner {
   private modelPath: string;
   private isProcessing: boolean = false;
   private processQueue: Array<() => Promise<void>> = [];
+  private isWarmedUp: boolean = false;
 
   constructor() {
     // Paths relative to project root
     this.binaryPath = path.join(process.cwd(), 'whisper', 'binaries', 'whisper-cpp');
-    this.modelPath = path.join(process.cwd(), 'whisper', 'models', 'ggml-small.bin');
+    // Using Tiny model for 3-4x faster transcription (vs Small model)
+    // Trade-off: Slightly less accurate, but much faster response time
+    this.modelPath = path.join(process.cwd(), 'whisper', 'models', 'ggml-tiny.bin');
 
     this.verifyPaths();
   }
@@ -37,6 +40,73 @@ export class WhisperRunner {
     console.log('Whisper.cpp paths verified:');
     console.log('  Binary:', this.binaryPath);
     console.log('  Model:', this.modelPath);
+  }
+
+  /**
+   * Pre-warm Whisper model by running a dummy transcription
+   * This loads the model into memory to avoid cold start delay on first real transcription
+   */
+  async warmUp(): Promise<void> {
+    if (this.isWarmedUp) {
+      console.log('[WhisperRunner] Already warmed up, skipping');
+      return;
+    }
+
+    console.log('[WhisperRunner] Warming up model (loading into memory)...');
+    const startTime = Date.now();
+
+    try {
+      // Create a minimal silent WAV file (0.5 seconds at 16kHz)
+      const silentWavPath = path.join(process.cwd(), 'temp_warmup.wav');
+      this.createSilentWav(silentWavPath, 0.5);
+
+      // Run dummy transcription to load model
+      await this._transcribe(silentWavPath);
+
+      // Clean up temp file
+      if (fs.existsSync(silentWavPath)) {
+        fs.unlinkSync(silentWavPath);
+      }
+
+      const duration = Date.now() - startTime;
+      console.log(`[WhisperRunner] Warm-up complete in ${duration}ms - model loaded into memory`);
+      this.isWarmedUp = true;
+    } catch (error) {
+      console.error('[WhisperRunner] Warm-up failed:', error);
+      // Don't throw - first transcription will just be slower
+    }
+  }
+
+  /**
+   * Create a minimal silent WAV file for warm-up
+   */
+  private createSilentWav(filePath: string, durationSeconds: number): void {
+    const sampleRate = 16000;
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    const numSamples = Math.floor(sampleRate * durationSeconds);
+    const dataSize = numSamples * numChannels * (bitsPerSample / 8);
+
+    const buffer = Buffer.alloc(44 + dataSize);
+
+    // WAV header
+    buffer.write('RIFF', 0);
+    buffer.writeUInt32LE(36 + dataSize, 4);
+    buffer.write('WAVE', 8);
+    buffer.write('fmt ', 12);
+    buffer.writeUInt32LE(16, 16); // fmt chunk size
+    buffer.writeUInt16LE(1, 20); // PCM format
+    buffer.writeUInt16LE(numChannels, 22);
+    buffer.writeUInt32LE(sampleRate, 24);
+    buffer.writeUInt32LE(sampleRate * numChannels * (bitsPerSample / 8), 28);
+    buffer.writeUInt16LE(numChannels * (bitsPerSample / 8), 32);
+    buffer.writeUInt16LE(bitsPerSample, 34);
+    buffer.write('data', 36);
+    buffer.writeUInt32LE(dataSize, 40);
+
+    // Silent audio data (all zeros) - already initialized by Buffer.alloc
+
+    fs.writeFileSync(filePath, buffer);
   }
 
   /**
