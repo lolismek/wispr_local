@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+    <title>Voice-to-Text POC</title>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>Voice-to-Text POC</h1>
+
+            <div class="transcription-container">
+                <div id="transcription-box" class="transcription-box"></div>
+            </div>
+
+            <div class="controls">
+                <button id="record-button" class="record-button">
+                    <span class="record-icon"></span>
+                    <span class="record-text">Record</span>
+                </button>
+                <button id="clear-button" class="control-button">Clear</button>
+                <button id="copy-button" class="control-button">Copy</button>
+            </div>
+
+            <div class="status-bar">
+                <span id="status-text">Ready</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>
