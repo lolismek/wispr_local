@@ -1,26 +1,32 @@
+import { VADConfig, VADStateUpdate, DEFAULT_VAD_CONFIG } from '../../shared/types';
+
+export type { VADConfig, VADStateUpdate };
+
 export class AudioCaptureService {
   private audioContext: AudioContext | null = null;
   private mediaStream: MediaStream | null = null;
   private audioWorkletNode: AudioWorkletNode | null = null;
   private mediaStreamSource: MediaStreamAudioSourceNode | null = null;
 
-  private audioBuffer: Float32Array[] = [];
   private readonly targetSampleRate = 16000;
-  private readonly chunkDurationSeconds = 3;
-  private samplesCollected = 0;
-  private readonly samplesPerChunk: number;
+  private vadConfig: VADConfig;
 
-  private onChunkReady: ((chunk: Float32Array, sampleRate: number, timestamp: number) => void) | null = null;
+  private onChunkReady: ((chunk: Float32Array, sampleRate: number, timestamp: number, vadMetadata?: any) => void) | null = null;
+  private onVADStateChange: ((state: VADStateUpdate) => void) | null = null;
 
-  constructor() {
-    this.samplesPerChunk = this.chunkDurationSeconds * this.targetSampleRate;
+  constructor(vadConfig?: Partial<VADConfig>) {
+    this.vadConfig = { ...DEFAULT_VAD_CONFIG, ...vadConfig };
   }
 
   /**
    * Start capturing audio from microphone
    */
-  async start(onChunkReady: (chunk: Float32Array, sampleRate: number, timestamp: number) => void): Promise<void> {
+  async start(
+    onChunkReady: (chunk: Float32Array, sampleRate: number, timestamp: number, vadMetadata?: any) => void,
+    onVADStateChange?: (state: VADStateUpdate) => void
+  ): Promise<void> {
     this.onChunkReady = onChunkReady;
+    this.onVADStateChange = onVADStateChange || null;
 
     try {
       console.log('[AudioCapture] Requesting microphone access...');
@@ -61,23 +67,43 @@ export class AudioCaptureService {
       // Handle messages from the worklet
       this.audioWorkletNode.port.onmessage = (event) => {
         try {
-          const { audio, length } = event.data;
-          if (audio && length > 0) {
-            this.processAudioBuffer(audio);
+          const messageType = event.data.type;
+
+          if (messageType === 'audio-chunk') {
+            // Audio chunk ready for transcription
+            const { audio, sampleRate, timestamp, vadMetadata } = event.data;
+            if (audio && audio.length > 0 && this.onChunkReady) {
+              // Convert to Float32Array if needed
+              const chunk = audio instanceof Float32Array ? audio : new Float32Array(audio);
+              console.log(`[AudioCapture] Received speech chunk: ${chunk.length} samples (${(chunk.length / sampleRate).toFixed(2)}s)`);
+              this.onChunkReady(chunk, sampleRate, timestamp, vadMetadata);
+            }
+          } else if (messageType === 'vad-state') {
+            // VAD state update for UI feedback
+            const { state, energy, speechDuration, timestamp } = event.data;
+            if (this.onVADStateChange) {
+              this.onVADStateChange({ state, energy, speechDuration, timestamp });
+            }
           }
         } catch (error) {
           console.error('[AudioCapture] Error processing worklet message:', error);
         }
       };
 
+      // Send initial VAD configuration to worklet
+      console.log('[AudioCapture] Sending VAD configuration to worklet:', this.vadConfig);
+      this.audioWorkletNode.port.postMessage({
+        type: 'config',
+        config: this.vadConfig
+      });
+
       // Connect nodes
       this.mediaStreamSource.connect(this.audioWorkletNode);
       this.audioWorkletNode.connect(this.audioContext.destination);
 
-      console.log('[AudioCapture] Audio pipeline connected');
+      console.log('[AudioCapture] Audio pipeline connected with VAD');
       console.log('  Sample rate:', this.audioContext.sampleRate);
-      console.log('  Chunk duration:', this.chunkDurationSeconds, 'seconds');
-      console.log('  Samples per chunk:', this.samplesPerChunk);
+      console.log('  VAD config:', this.vadConfig);
       console.log('  Audio context state:', this.audioContext.state);
 
       // Resume AudioContext if it's suspended
@@ -121,10 +147,9 @@ export class AudioCaptureService {
         this.audioContext = null;
       }
 
-      // Reset buffers
-      this.audioBuffer = [];
-      this.samplesCollected = 0;
+      // Reset callbacks
       this.onChunkReady = null;
+      this.onVADStateChange = null;
 
       console.log('[AudioCapture] Audio capture stopped');
     } catch (error) {
@@ -133,51 +158,25 @@ export class AudioCaptureService {
   }
 
   /**
-   * Process incoming audio buffer from AudioWorklet
+   * Update VAD configuration dynamically
    */
-  private processAudioBuffer(channelData: Float32Array): void {
-    // Add to buffer
-    this.audioBuffer.push(new Float32Array(channelData));
-    this.samplesCollected += channelData.length;
+  updateVADConfig(config: Partial<VADConfig>): void {
+    this.vadConfig = { ...this.vadConfig, ...config };
+    console.log('[AudioCapture] Updating VAD config:', this.vadConfig);
 
-    // Log progress occasionally (every ~100ms worth of data)
-    if (this.samplesCollected % 1600 === 0) {
-      console.log(`[AudioCapture] Buffer: ${this.samplesCollected}/${this.samplesPerChunk} samples`);
-    }
-
-    // Check if we have enough samples for a chunk
-    if (this.samplesCollected >= this.samplesPerChunk) {
-      console.log('[AudioCapture] Enough samples collected, emitting chunk...');
-      this.emitChunk();
+    if (this.audioWorkletNode) {
+      this.audioWorkletNode.port.postMessage({
+        type: 'config',
+        config: this.vadConfig
+      });
     }
   }
 
   /**
-   * Combine buffered audio and emit as chunk
+   * Get current VAD configuration
    */
-  private emitChunk(): void {
-    if (!this.onChunkReady || this.audioBuffer.length === 0) {
-      return;
-    }
-
-    // Combine all buffers into single Float32Array
-    const chunk = new Float32Array(this.samplesCollected);
-    let offset = 0;
-
-    for (const buffer of this.audioBuffer) {
-      chunk.set(buffer, offset);
-      offset += buffer.length;
-    }
-
-    // Emit the chunk
-    const timestamp = Date.now();
-    console.log(`[AudioCapture] Emitting chunk: ${this.samplesCollected} samples (${(this.samplesCollected / this.targetSampleRate).toFixed(2)}s)`);
-
-    this.onChunkReady(chunk, this.targetSampleRate, timestamp);
-
-    // Reset buffers
-    this.audioBuffer = [];
-    this.samplesCollected = 0;
+  getVADConfig(): VADConfig {
+    return { ...this.vadConfig };
   }
 
   /**

@@ -1,5 +1,5 @@
 import './styles/main.css';
-import { AudioCaptureService } from './services/audio-capture';
+import { AudioCaptureService, VADStateUpdate } from './services/audio-capture';
 
 // DOM elements
 const recordButton = document.getElementById('record-button') as HTMLButtonElement;
@@ -111,30 +111,46 @@ async function startRecording() {
       throw err;
     }
 
-    console.log('[Renderer] Starting audio capture service...');
+    console.log('[Renderer] Starting audio capture service with VAD...');
     // Start audio capture
     try {
-      await audioCaptureService.start((chunk, sampleRate, timestamp) => {
-        try {
-          console.log(`[Renderer] Chunk ready: ${chunk.length} samples`);
+      await audioCaptureService.start(
+        (chunk, sampleRate, timestamp, vadMetadata) => {
+          try {
+            console.log(`[Renderer] Speech chunk ready: ${chunk.length} samples`);
+            if (vadMetadata) {
+              console.log(`[Renderer] VAD metadata:`, vadMetadata);
+            }
 
-          // Convert Float32Array to regular array for IPC transfer
-          const bufferArray = Array.from(chunk);
-          console.log(`[Renderer] Converted to array: ${bufferArray.length} samples`);
+            // Convert Float32Array to regular array for IPC transfer
+            const bufferArray = Array.from(chunk);
+            console.log(`[Renderer] Converted to array: ${bufferArray.length} samples`);
 
-          // Send audio chunk to main process
-          console.log('[Renderer] Sending to main process via IPC...');
-          window.electronAPI.processAudioChunk({
-            buffer: bufferArray,
-            sampleRate,
-            timestamp,
-          });
-          console.log('[Renderer] Chunk sent successfully');
-        } catch (chunkError) {
-          console.error('[Renderer] Error processing chunk:', chunkError);
+            // Send audio chunk to main process
+            console.log('[Renderer] Sending to main process via IPC...');
+            window.electronAPI.processAudioChunk({
+              buffer: bufferArray,
+              sampleRate,
+              timestamp,
+            });
+            console.log('[Renderer] Chunk sent successfully');
+          } catch (chunkError) {
+            console.error('[Renderer] Error processing chunk:', chunkError);
+          }
+        },
+        (vadState: VADStateUpdate) => {
+          // Handle VAD state updates for UI feedback
+          console.log(`[Renderer] VAD state: ${vadState.state}, energy: ${vadState.energy.toFixed(4)}`);
+
+          // Update status based on VAD state
+          if (vadState.state === 'SPEAKING') {
+            updateStatus('Speaking...', 'recording');
+          } else if (vadState.state === 'LISTENING') {
+            updateStatus('Listening...', 'recording');
+          }
         }
-      });
-      console.log('[Renderer] Audio capture started');
+      );
+      console.log('[Renderer] Audio capture started with VAD');
     } catch (audioError) {
       console.error('[Renderer] Error starting audio capture:', audioError);
       throw audioError;
