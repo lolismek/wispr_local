@@ -81,10 +81,6 @@ h1 {
   animation: pulse 2s infinite;
 }
 
-.status-indicator.paused::before {
-  background: #f39c12;
-}
-
 .status-indicator.error::before {
   background: #e74c3c;
 }

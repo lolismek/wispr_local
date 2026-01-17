@@ -71,23 +71,11 @@ class WindowMonitor {
         let pid = app.processIdentifier
         let appName = app.localizedName ?? "Unknown"
 
-        // Check if this is the Electron app (should be ignored)
-        if let electronPID = config.electronPID, pid == electronPID {
-            // Stream paused update
-            outputStreamer.streamUpdate(
-                appName: currentAppName,
-                appPID: currentActivePID,
-                textBoxes: lastTextBoxes,
-                isPaused: true
-            )
-            return
-        }
-
         // Update current app
         currentActivePID = pid
         currentAppName = appName
 
-        // Query immediately on app change
+        // Query immediately on app change (including Electron app - it will just find 0 text boxes)
         queryAndStream()
     }
 
@@ -95,14 +83,6 @@ class WindowMonitor {
 
     private func performPeriodicRefresh() {
         guard isRunning, currentActivePID != 0 else { return }
-
-        // Skip if Electron app is active
-        if let electronPID = config.electronPID {
-            if let frontmost = NSWorkspace.shared.frontmostApplication,
-               frontmost.processIdentifier == electronPID {
-                return
-            }
-        }
 
         queryAndStream()
     }

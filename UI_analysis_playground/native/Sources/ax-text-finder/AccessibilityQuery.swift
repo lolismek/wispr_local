@@ -90,6 +90,29 @@ class AccessibilityQuery {
         let isFocused = getAttributeValue(element: element, attribute: kAXFocusedAttribute) as? Bool ?? false
         let isEnabled = getAttributeValue(element: element, attribute: kAXEnabledAttribute) as? Bool ?? true
 
+        // Check if the text box is editable/writable
+        // Strategy: Check if the value attribute is settable, OR if the role indicates an editable field
+        var isSettable: DarwinBoolean = false
+        let settableResult = AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &isSettable)
+        let isValueSettable = (settableResult == .success && isSettable.boolValue)
+
+        // TextFields and TextAreas are typically editable by their nature
+        // ComboBoxes might not report as settable but are still editable
+        let hasEditableRole = [
+            kAXTextFieldRole as String,
+            kAXTextAreaRole as String,
+            kAXComboBoxRole as String
+        ].contains(role)
+
+        // Include if: (settable check passed) OR (has editable role AND is enabled)
+        // This handles both native apps and web content in Safari
+        let isEditable = isValueSettable || (hasEditableRole && isEnabled)
+
+        // Filter out read-only text boxes
+        guard isEditable else {
+            return nil
+        }
+
         return TextBoxInfo(
             role: role,
             position: position,

@@ -158,12 +158,7 @@ async function stopMonitoring() {
 
 function handleUpdate(update: MonitorUpdate) {
   // Update app info
-  if (update.isPaused) {
-    currentAppDiv.textContent = `Monitoring paused (own app active)`;
-    updateStatusIndicator('paused', 'Paused');
-  } else {
-    currentAppDiv.textContent = `Monitoring: ${update.appName} (PID: ${update.appPID})`;
-  }
+  currentAppDiv.textContent = `Monitoring: ${update.appName} (PID: ${update.appPID})`;
 
   // Update timestamp
   const timestamp = new Date(update.timestamp);
