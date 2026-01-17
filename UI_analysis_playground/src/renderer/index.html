@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+    <title>Text Box Monitor</title>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>Text Box Monitor</h1>
+
+            <div class="status-section">
+                <div class="status-row">
+                    <span class="status-label">Status:</span>
+                    <span id="status-indicator" class="status-indicator stopped">Stopped</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Permission:</span>
+                    <span id="permission-status" class="permission-status">Checking...</span>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="start-button" class="control-button start-button" disabled>Start Monitoring</button>
+                <button id="stop-button" class="control-button stop-button" disabled>Stop Monitoring</button>
+                <button id="permission-button" class="control-button permission-button" style="display: none;">Grant Permission</button>
+            </div>
+
+            <div class="app-info">
+                <div id="current-app">No active monitoring</div>
+                <div id="last-update" class="last-update"></div>
+            </div>
+
+            <div class="results-section">
+                <div class="results-header">
+                    <span>Text Boxes Found: </span>
+                    <span id="text-box-count">0</span>
+                </div>
+                <div id="text-boxes-list" class="text-boxes-list">
+                    <div class="empty-state">Start monitoring to see text boxes</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

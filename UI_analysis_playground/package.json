@@ -1,0 +1,29 @@
+{
+  "name": "ui-text-box-monitor",
+  "version": "1.0.0",
+  "description": "Live Text Box Monitor using macOS Accessibility API",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "build:swift": "bash native/build.sh",
+    "build:electron": "webpack --config webpack.config.js",
+    "build": "npm run build:swift && npm run build:electron",
+    "dev": "npm run build && electron .",
+    "start": "electron ."
+  },
+  "keywords": ["electron", "accessibility", "macos", "typescript"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^28.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "css-loader": "^6.8.1",
+    "html-webpack-plugin": "^5.6.0",
+    "style-loader": "^3.3.3",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.0",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  }
+}
