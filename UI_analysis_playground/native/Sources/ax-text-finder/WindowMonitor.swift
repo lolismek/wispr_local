@@ -14,7 +14,7 @@ class WindowMonitor {
 
     init(config: MonitorConfig) {
         self.config = config
-        self.accessibilityQuery = AccessibilityQuery(maxDepth: config.maxDepth)
+        self.accessibilityQuery = AccessibilityQuery(maxDepth: config.maxDepth, debugMode: config.debugMode)
         self.outputStreamer = OutputStreamer()
     }
 

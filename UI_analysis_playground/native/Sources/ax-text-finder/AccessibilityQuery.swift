@@ -3,9 +3,11 @@ import Foundation
 
 class AccessibilityQuery {
     private let maxDepth: Int
+    private let debugMode: Bool
 
-    init(maxDepth: Int = 10) {
+    init(maxDepth: Int = 30, debugMode: Bool = false) {
         self.maxDepth = maxDepth
+        self.debugMode = debugMode
     }
 
     // MARK: - Public API
@@ -13,20 +15,34 @@ class AccessibilityQuery {
     func queryTextBoxes(pid: pid_t) -> [TextBoxInfo] {
         let appElement = AXUIElementCreateApplication(pid)
         var textBoxes: [TextBoxInfo] = []
+        var elementCount = 0
 
-        traverseUIHierarchy(element: appElement, depth: 0, textBoxes: &textBoxes)
+        if debugMode {
+            fputs("=== Starting accessibility tree traversal ===\n", stderr)
+        }
+
+        traverseUIHierarchy(element: appElement, depth: 0, textBoxes: &textBoxes, elementCount: &elementCount)
+
+        if debugMode {
+            fputs("=== Traversal complete: \(elementCount) elements, \(textBoxes.count) text boxes ===\n", stderr)
+        }
 
         return textBoxes
     }
 
     // MARK: - UI Hierarchy Traversal (Breadth-First)
 
-    private func traverseUIHierarchy(element: AXUIElement, depth: Int, textBoxes: inout [TextBoxInfo]) {
+    private func traverseUIHierarchy(element: AXUIElement, depth: Int, textBoxes: inout [TextBoxInfo], elementCount: inout Int) {
         guard depth < maxDepth else { return }
+
+        elementCount += 1
 
         // Check if this element is a text box
         if let textBox = extractTextBoxInfo(from: element) {
             textBoxes.append(textBox)
+            if debugMode {
+                fputs("✓ ADDED TEXT BOX: \(textBox.role)\n", stderr)
+            }
         }
 
         // Get children and traverse
@@ -35,7 +51,7 @@ class AccessibilityQuery {
         }
 
         for child in children {
-            traverseUIHierarchy(element: child, depth: depth + 1, textBoxes: &textBoxes)
+            traverseUIHierarchy(element: child, depth: depth + 1, textBoxes: &textBoxes, elementCount: &elementCount)
         }
     }
 
@@ -47,11 +63,18 @@ class AccessibilityQuery {
         }
 
         // Filter for text input elements
+        // Includes both native macOS roles and Chromium-specific roles
         let textBoxRoles = [
+            // Native macOS roles
             kAXTextFieldRole as String,
             kAXTextAreaRole as String,
             kAXComboBoxRole as String,
-            "AXSearchField" // Search field role
+            "AXSearchField",
+            // Chromium/web content roles
+            "AXTextField",  // Chromium text field
+            "AXTextArea",   // Chromium text area
+            "AXSearchField", // Chromium search field
+            "AXComboBox"    // Chromium combo box
         ]
 
         guard textBoxRoles.contains(role) else {
@@ -110,6 +133,9 @@ class AccessibilityQuery {
 
         // Filter out read-only text boxes
         guard isEditable else {
+            if debugMode {
+                fputs("✗ REJECTED \(role): settable=\(isValueSettable) editableRole=\(hasEditableRole) enabled=\(isEnabled)\n", stderr)
+            }
             return nil
         }
 

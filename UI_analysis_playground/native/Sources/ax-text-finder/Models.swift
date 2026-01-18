@@ -41,6 +41,7 @@ struct MonitorUpdate: Codable {
 
 struct MonitorConfig {
     var refreshInterval: TimeInterval = 0.5 // 500ms
-    var maxDepth: Int = 10
+    var maxDepth: Int = 30  // Increased for Electron apps (deeper hierarchy)
     var electronPID: Int32? = nil
+    var debugMode: Bool = false
 }

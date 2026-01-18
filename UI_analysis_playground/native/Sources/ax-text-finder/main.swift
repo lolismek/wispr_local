@@ -25,6 +25,8 @@ func parseArguments() -> MonitorConfig {
                 config.maxDepth = depth
                 i += 1
             }
+        case "--debug":
+            config.debugMode = true
         case "--help", "-h":
             printHelp()
             exit(0)
@@ -46,7 +48,8 @@ func printHelp() {
     Options:
       --refresh-interval <ms>   Refresh interval in milliseconds (default: 500)
       --electron-pid <pid>      PID of Electron app to ignore when active
-      --max-depth <depth>       Maximum UI hierarchy depth to traverse (default: 10)
+      --max-depth <depth>       Maximum UI hierarchy depth to traverse (default: 30)
+      --debug                   Enable debug mode (logs all roles to stderr)
       --check-permission        Check if accessibility permission is granted and exit
       --help, -h                Show this help message
 

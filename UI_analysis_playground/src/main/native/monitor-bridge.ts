@@ -55,6 +55,10 @@ export class MonitorBridge extends EventEmitter {
       '--max-depth', String(this.config.maxDepth),
     ];
 
+    if (this.config.debugMode) {
+      args.push('--debug');
+    }
+
     console.log(`[MonitorBridge] Spawning: ${binaryPath} ${args.join(' ')}`);
 
     try {
@@ -114,6 +118,11 @@ export class MonitorBridge extends EventEmitter {
 
     try {
       const update = JSON.parse(line) as MonitorUpdate;
+
+      // Debug: Log text box count
+      if (this.config.debugMode) {
+        console.log(`[MonitorBridge] Received update: ${update.appName}, ${update.textBoxes.length} text boxes`);
+      }
 
       // Check for permission error
       if (update.error && update.error.includes('permission')) {

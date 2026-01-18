@@ -43,9 +43,11 @@ export interface MonitorStatusUpdate {
 export interface MonitorConfig {
   refreshInterval: number; // milliseconds
   maxDepth: number;
+  debugMode: boolean;
 }
 
 export const DEFAULT_MONITOR_CONFIG: MonitorConfig = {
   refreshInterval: 500,
-  maxDepth: 10,
+  maxDepth: 30,  // Increased for Electron apps with deeper hierarchies
+  debugMode: false,  // Set to true for debugging
 };
