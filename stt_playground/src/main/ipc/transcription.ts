@@ -5,9 +5,17 @@ import { TranscriptionResult, TranscriptionError, TranscriptionStatusUpdate } fr
 
 let whisperServer: WhisperServer | null = null;
 let chunkCounter = 0;
+let handlersRegistered = false;
 
 export function registerTranscriptionHandlers(mainWindow: BrowserWindow) {
-  console.log('Registering transcription IPC handlers');
+  // Prevent duplicate registration
+  if (handlersRegistered) {
+    console.log('[Main] IPC handlers already registered, skipping duplicate registration');
+    return;
+  }
+
+  console.log('[Main] Registering transcription IPC handlers');
+  handlersRegistered = true;
 
   // Initialize whisper server (persistent process with model loaded in memory)
   try {
@@ -23,18 +31,18 @@ export function registerTranscriptionHandlers(mainWindow: BrowserWindow) {
       sendStatus(mainWindow, 'error', `Server start failed: ${(error as Error).message}`);
     });
   } catch (error) {
-    console.error('Failed to initialize WhisperServer:', error);
+    console.error('[Main] Failed to initialize WhisperServer:', error);
     sendStatus(mainWindow, 'error', `Failed to initialize: ${(error as Error).message}`);
   }
 
   ipcMain.on('start-recording', (event) => {
-    console.log('Start recording request received');
+    console.log('[Main] Start recording request received');
     chunkCounter = 0;
     sendStatus(mainWindow, 'recording', 'Recording started');
   });
 
   ipcMain.on('stop-recording', (event) => {
-    console.log('Stop recording request received');
+    console.log('[Main] Stop recording request received');
     sendStatus(mainWindow, 'ready', 'Recording stopped');
   });
 

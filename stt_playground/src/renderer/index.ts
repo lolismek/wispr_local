@@ -117,23 +117,24 @@ async function startRecording() {
       await audioCaptureService.start(
         (chunk, sampleRate, timestamp, vadMetadata) => {
           try {
-            console.log(`[Renderer] Speech chunk ready: ${chunk.length} samples`);
+            const chunkId = `${timestamp}-${chunk.length}`;
+            console.log(`[Renderer] Speech chunk ready [ID: ${chunkId}]: ${chunk.length} samples`);
             if (vadMetadata) {
               console.log(`[Renderer] VAD metadata:`, vadMetadata);
             }
 
             // Convert Float32Array to regular array for IPC transfer
             const bufferArray = Array.from(chunk);
-            console.log(`[Renderer] Converted to array: ${bufferArray.length} samples`);
+            console.log(`[Renderer] Converted to array [ID: ${chunkId}]: ${bufferArray.length} samples`);
 
             // Send audio chunk to main process
-            console.log('[Renderer] Sending to main process via IPC...');
+            console.log(`[Renderer] Sending to main process via IPC [ID: ${chunkId}]...`);
             window.electronAPI.processAudioChunk({
               buffer: bufferArray,
               sampleRate,
               timestamp,
             });
-            console.log('[Renderer] Chunk sent successfully');
+            console.log(`[Renderer] Chunk sent successfully [ID: ${chunkId}]`);
           } catch (chunkError) {
             console.error('[Renderer] Error processing chunk:', chunkError);
           }

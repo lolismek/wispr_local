@@ -3,6 +3,13 @@ import { AudioChunk, TranscriptionResult, TranscriptionError, TranscriptionStatu
 
 console.log('[Preload] Preload script executing...');
 
+// Check if already exposed (prevent duplicates)
+if ((window as any).electronAPI) {
+  console.log('[Preload] electronAPI already exposed, skipping duplicate exposure');
+} else {
+  console.log('[Preload] Exposing electronAPI for the first time');
+}
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 try {

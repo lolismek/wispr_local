@@ -4,8 +4,17 @@ import { createWindow } from './window';
 import { registerTranscriptionHandlers } from './ipc/transcription';
 
 let mainWindow: BrowserWindow | null = null;
+let appInitialized = false;
 
 function initializeApp() {
+  if (appInitialized) {
+    console.log('[Main] App already initialized, skipping duplicate initialization');
+    return;
+  }
+
+  console.log('[Main] Initializing app...');
+  appInitialized = true;
+
   mainWindow = createWindow();
 
   // Register IPC handlers

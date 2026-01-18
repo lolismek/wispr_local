@@ -60,7 +60,7 @@ export class WhisperServer {
         '-m', this.modelPath,
         '-p', this.port.toString(),
         '-t', '4', // 4 threads
-        '--convert', // Auto-convert uploaded audio files
+        // Note: No --convert flag - we pre-convert to WAV with AudioProcessor (no ffmpeg needed)
       ];
 
       console.log('[WhisperServer] Command:', this.binaryPath, args.join(' '));
