@@ -1,17 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { AudioChunk, TranscriptionResult, TranscriptionError, TranscriptionStatusUpdate } from '../shared/types';
+import { AudioChunk, TranscriptionResult, TranscriptionError, TranscriptionStatusUpdate, ElectronAPI } from '../shared/types';
 
 console.log('[Preload] Preload script executing...');
 
-// Check if already exposed (prevent duplicates)
-if ((window as any).electronAPI) {
-  console.log('[Preload] electronAPI already exposed, skipping duplicate exposure');
-} else {
-  console.log('[Preload] Exposing electronAPI for the first time');
-}
-
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
+// Note: contextBridge will prevent duplicate exposure automatically
 try {
   contextBridge.exposeInMainWorld('electronAPI', {
     // Send methods
@@ -31,6 +25,10 @@ try {
         console.error('[Preload] Error sending audio chunk:', error);
         throw error;
       }
+    },
+    setHotkeyMode: (enabled: boolean) => {
+      console.log('[Preload] setHotkeyMode called:', enabled);
+      ipcRenderer.send('set-hotkey-mode', enabled);
     },
 
     // Receive methods
@@ -61,12 +59,23 @@ try {
         }
       });
     },
+    onToggleRecordingHotkey: (callback: () => void) => {
+      ipcRenderer.on('toggle-recording-hotkey', () => {
+        try {
+          console.log('[Preload] Global hotkey toggle event received');
+          callback();
+        } catch (error) {
+          console.error('[Preload] Error in hotkey toggle callback:', error);
+        }
+      });
+    },
 
     // Cleanup methods
     removeTranscriptionListeners: () => {
       ipcRenderer.removeAllListeners('transcription-result');
       ipcRenderer.removeAllListeners('transcription-error');
       ipcRenderer.removeAllListeners('transcription-status');
+      ipcRenderer.removeAllListeners('toggle-recording-hotkey');
     },
   });
 
@@ -75,19 +84,4 @@ try {
   console.error('[Preload] Error exposing electronAPI:', error);
 }
 
-// Type definition for window.electronAPI
-export interface ElectronAPI {
-  startRecording: () => void;
-  stopRecording: () => void;
-  processAudioChunk: (audioData: { buffer: number[]; sampleRate: number; timestamp: number }) => void;
-  onTranscriptionResult: (callback: (result: TranscriptionResult) => void) => void;
-  onTranscriptionError: (callback: (error: TranscriptionError) => void) => void;
-  onTranscriptionStatus: (callback: (status: TranscriptionStatusUpdate) => void) => void;
-  removeTranscriptionListeners: () => void;
-}
-
-declare global {
-  interface Window {
-    electronAPI: ElectronAPI;
-  }
-}
+// Note: ElectronAPI type and Window interface extension are now in src/shared/types.ts

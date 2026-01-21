@@ -2,10 +2,85 @@ import { ipcMain, BrowserWindow } from 'electron';
 import { WhisperServer } from '../whisper/whisper-server';
 import { AudioProcessor } from '../whisper/audio-processor';
 import { TranscriptionResult, TranscriptionError, TranscriptionStatusUpdate } from '../../shared/types';
+import { insertTextIntoFocusedField } from '../text-insertion';
 
 let whisperServer: WhisperServer | null = null;
 let chunkCounter = 0;
 let handlersRegistered = false;
+let isHotkeyMode = false; // Track if recording was started via global hotkey
+let lastInsertedText = ''; // Track last inserted text for deduplication
+let insertedTexts: string[] = []; // Track recent insertions (last 5)
+let isInserting = false; // Semaphore to prevent concurrent insertions
+
+/**
+ * Check if the text is a duplicate or very similar to recently inserted text
+ * Returns true if it should be skipped (is a duplicate)
+ */
+function isDuplicateText(newText: string): boolean {
+  const normalized = newText.trim().toLowerCase();
+
+  console.log('[Main] 🔍 Checking for duplicate:');
+  console.log('[Main]   New text: "%s"', newText);
+  console.log('[Main]   Normalized: "%s"', normalized);
+  console.log('[Main]   Last inserted: "%s"', lastInsertedText);
+  console.log('[Main]   Recent insertions count: %d', insertedTexts.length);
+
+  // Check exact match with last inserted
+  if (lastInsertedText && normalized === lastInsertedText.trim().toLowerCase()) {
+    console.log('[Main] ❌ Duplicate detected: exact match with last insertion');
+    return true;
+  }
+
+  // Check if it's in recent insertions (last 5)
+  for (let i = 0; i < insertedTexts.length; i++) {
+    const recentText = insertedTexts[i];
+    const recentNormalized = recentText.trim().toLowerCase();
+
+    console.log('[Main]   Comparing with recent[%d]: "%s"', i, recentText);
+
+    if (normalized === recentNormalized) {
+      console.log('[Main] ❌ Duplicate detected: exact match with recent insertion #%d', i);
+      return true;
+    }
+
+    // Check if new text is just the old text with minor variations (punctuation)
+    // e.g., "Hello" vs "Hello!" or "Hello."
+    const newTextNoPunct = normalized.replace(/[.,!?;:]/g, '');
+    const recentNoPunct = recentNormalized.replace(/[.,!?;:]/g, '');
+
+    console.log('[Main]     Without punctuation - new: "%s", recent: "%s"', newTextNoPunct, recentNoPunct);
+
+    if (newTextNoPunct === recentNoPunct && newTextNoPunct.length > 0) {
+      console.log('[Main] ❌ Duplicate detected: same text with different punctuation (recent #%d)', i);
+      return true;
+    }
+  }
+
+  console.log('[Main] ✅ Text is unique, not a duplicate');
+  return false;
+}
+
+/**
+ * Track inserted text for deduplication
+ */
+function trackInsertedText(text: string) {
+  lastInsertedText = text;
+  insertedTexts.push(text);
+  // Keep only last 5 insertions
+  if (insertedTexts.length > 5) {
+    insertedTexts.shift();
+  }
+}
+
+/**
+ * Reset insertion tracking (called when recording starts)
+ */
+function resetInsertionTracking() {
+  lastInsertedText = '';
+  insertedTexts = [];
+  isInserting = false; // Reset semaphore too
+  console.log('[Main] Insertion tracking reset');
+}
 
 export function registerTranscriptionHandlers(mainWindow: BrowserWindow) {
   // Prevent duplicate registration
@@ -35,9 +110,21 @@ export function registerTranscriptionHandlers(mainWindow: BrowserWindow) {
     sendStatus(mainWindow, 'error', `Failed to initialize: ${(error as Error).message}`);
   }
 
+  // Handler for hotkey mode toggle
+  ipcMain.on('set-hotkey-mode', (event, enabled: boolean) => {
+    isHotkeyMode = enabled;
+    console.log('[Main] Hotkey mode:', enabled ? 'ENABLED' : 'DISABLED');
+    if (enabled) {
+      console.log('[Main] Text will be inserted into focused text fields after each chunk');
+    } else {
+      console.log('[Main] Text will only appear in app UI');
+    }
+  });
+
   ipcMain.on('start-recording', (event) => {
     console.log('[Main] Start recording request received');
     chunkCounter = 0;
+    resetInsertionTracking(); // Reset deduplication tracking
     sendStatus(mainWindow, 'recording', 'Recording started');
   });
 
@@ -92,7 +179,40 @@ export function registerTranscriptionHandlers(mainWindow: BrowserWindow) {
           isFinal: false,
         };
 
+        // Send to UI (always)
         mainWindow.webContents.send('transcription-result', transcriptionResult);
+
+        // NEW: If hotkey mode, also insert text into external app (real-time per chunk)
+        if (isHotkeyMode) {
+          console.log('[Main] 🔑 Hotkey mode active, checking for duplicates...');
+
+          // Check if another insertion is already in progress
+          if (isInserting) {
+            console.log('[Main] ⏸️  Another insertion already in progress, skipping this call');
+          } else if (isDuplicateText(result.text)) {
+            // Check if this text is a duplicate before inserting
+            console.log('[Main] ⏭️  Skipping duplicate text insertion:', result.text);
+          } else {
+            console.log('[Main] ✏️  Inserting unique text...');
+            isInserting = true; // Set semaphore
+            try {
+              const insertResult = await insertTextIntoFocusedField(result.text);
+              if (insertResult.success) {
+                console.log('[Main] ✓ Text inserted via clipboard paste');
+                trackInsertedText(result.text); // Track for deduplication
+              } else {
+                console.log('[Main] ⚠️  Text insertion failed:', insertResult.error);
+              }
+            } catch (insertError) {
+              console.error('[Main] ✗ Text insertion error:', insertError);
+              // Don't fail transcription if insertion fails
+            } finally {
+              isInserting = false; // Release semaphore
+              console.log('[Main] 🔓 Insertion semaphore released');
+            }
+          }
+        }
+
         sendStatus(mainWindow, 'ready', 'Ready for next chunk');
       } else {
         console.error('[Main] Transcription failed:', result.error);

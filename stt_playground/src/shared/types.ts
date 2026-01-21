@@ -68,3 +68,23 @@ export const DEFAULT_VAD_CONFIG: VADConfig = {
   preSpeechPadding: 250,
   postSpeechPadding: 150         // Reduced from 300ms - less padding after speech
 };
+
+// ElectronAPI interface (exposed via contextBridge in preload)
+export interface ElectronAPI {
+  startRecording: () => void;
+  stopRecording: () => void;
+  processAudioChunk: (audioData: { buffer: number[]; sampleRate: number; timestamp: number }) => void;
+  setHotkeyMode: (enabled: boolean) => void;
+  onTranscriptionResult: (callback: (result: TranscriptionResult) => void) => void;
+  onTranscriptionError: (callback: (error: TranscriptionError) => void) => void;
+  onTranscriptionStatus: (callback: (status: TranscriptionStatusUpdate) => void) => void;
+  onToggleRecordingHotkey: (callback: () => void) => void;
+  removeTranscriptionListeners: () => void;
+}
+
+// Extend global Window interface to include electronAPI
+declare global {
+  interface Window {
+    electronAPI: ElectronAPI;
+  }
+}

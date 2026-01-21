@@ -109,8 +109,11 @@ export class AudioProcessor {
     try {
       await fs.promises.unlink(filePath);
       console.log(`Cleaned up temp file: ${filePath}`);
-    } catch (error) {
-      console.error(`Failed to cleanup temp file ${filePath}:`, error);
+    } catch (error: any) {
+      // Ignore if file doesn't exist (already deleted)
+      if (error.code !== 'ENOENT') {
+        console.error(`Failed to cleanup temp file ${filePath}:`, error);
+      }
     }
   }
 

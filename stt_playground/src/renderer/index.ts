@@ -13,6 +13,7 @@ const statusBar = statusText.parentElement as HTMLDivElement;
 let isRecording = false;
 let transcriptionText = '';
 let initialized = false;
+let isHotkeyMode = false; // Track if recording was started via global hotkey
 
 // Audio capture service
 const audioCaptureService = new AudioCaptureService();
@@ -45,7 +46,15 @@ function init() {
   }
 
   // Set up event listeners (only once)
-  recordButton.addEventListener('click', toggleRecording);
+  recordButton.addEventListener('click', () => {
+    // Button click - disable hotkey mode (manual interaction)
+    if (!isRecording) {
+      console.log('[Renderer] Record button clicked (manual mode)');
+      isHotkeyMode = false;
+      window.electronAPI.setHotkeyMode(false);
+    }
+    toggleRecording();
+  });
   clearButton.addEventListener('click', clearTranscription);
   copyButton.addEventListener('click', copyTranscription);
 
@@ -74,6 +83,25 @@ function setupIPCListeners() {
   window.electronAPI.onTranscriptionStatus((status) => {
     console.log('Status update:', status);
     updateStatus(status.message || status.status, status.status);
+  });
+
+  // Listen for global hotkey toggle
+  window.electronAPI.onToggleRecordingHotkey(() => {
+    console.log('[Renderer] Global hotkey triggered, current isRecording:', isRecording);
+
+    // If starting recording via hotkey, enable hotkey mode
+    if (!isRecording) {
+      console.log('[Renderer] Starting recording in hotkey mode');
+      isHotkeyMode = true;
+      window.electronAPI.setHotkeyMode(true);
+    } else {
+      // If stopping via hotkey, disable hotkey mode
+      console.log('[Renderer] Stopping recording, disabling hotkey mode');
+      isHotkeyMode = false;
+      window.electronAPI.setHotkeyMode(false);
+    }
+
+    toggleRecording();
   });
 }
 

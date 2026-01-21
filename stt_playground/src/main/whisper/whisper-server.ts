@@ -58,7 +58,7 @@ export class WhisperServer {
     return new Promise((resolve, reject) => {
       const args = [
         '-m', this.modelPath,
-        '-p', this.port.toString(),
+        '--port', this.port.toString(),
         '-t', '4', // 4 threads
         // Note: No --convert flag - we pre-convert to WAV with AudioProcessor (no ffmpeg needed)
       ];
@@ -67,13 +67,15 @@ export class WhisperServer {
 
       this.serverProcess = spawn(this.binaryPath, args);
 
+      let modelLoaded = false;
+
       // Track server output
       this.serverProcess.stdout?.on('data', (data) => {
         const output = data.toString();
         console.log('[WhisperServer stdout]', output);
 
         // Server ready when it starts listening
-        if (output.includes('HTTP server listening')) {
+        if (output.includes('HTTP server listening') || output.includes('listening')) {
           this.isReady = true;
           console.log('[WhisperServer] Server ready!');
           resolve();
@@ -81,7 +83,33 @@ export class WhisperServer {
       });
 
       this.serverProcess.stderr?.on('data', (data) => {
-        console.log('[WhisperServer stderr]', data.toString());
+        const output = data.toString();
+        console.log('[WhisperServer stderr]', output);
+
+        // Check for explicit server ready messages
+        if (output.includes('HTTP server listening') ||
+            output.includes('listening on') ||
+            output.includes('server listening')) {
+          if (!this.isReady) {
+            this.isReady = true;
+            console.log('[WhisperServer] Server ready!');
+            resolve();
+          }
+        }
+
+        // Detect when model initialization completes
+        if (!modelLoaded && output.includes('compute buffer (decode)')) {
+          modelLoaded = true;
+          console.log('[WhisperServer] Model initialization complete, waiting for server startup...');
+          // Give server 3 more seconds to start after model loads
+          setTimeout(() => {
+            if (!this.isReady) {
+              this.isReady = true;
+              console.log('[WhisperServer] Server ready! (assumed after model load)');
+              resolve();
+            }
+          }, 3000);
+        }
       });
 
       this.serverProcess.on('error', (error) => {
@@ -95,12 +123,13 @@ export class WhisperServer {
         this.serverProcess = null;
       });
 
-      // Timeout if server doesn't start in 10 seconds
+      // Fallback timeout if nothing works
       setTimeout(() => {
         if (!this.isReady) {
-          reject(new Error('Server failed to start within 10 seconds'));
+          console.error('[WhisperServer] Timeout after 30 seconds');
+          reject(new Error('Server failed to start within 30 seconds'));
         }
-      }, 10000);
+      }, 30000)
     });
   }
 
@@ -156,7 +185,7 @@ export class WhisperServer {
       const blob = new Blob([audioBuffer], { type: 'audio/wav' });
       formData.append('file', blob, 'audio.wav');
 
-      const response = await axios.post(`http://localhost:${this.port}/inference`, formData, {
+      const response = await axios.post(`http://127.0.0.1:${this.port}/inference`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
